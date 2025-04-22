@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 
-function ClientsTable() {
+function ClientsTable({ user }) {
+  const userRole = user?.role || user?.Role || 'موظف';
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط' });
+  const [form, setForm] = useState({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط', branch: user?.branch || user?.Branch || '1' });
   const [editId, setEditId] = useState(null);
 
   useEffect(() => {
@@ -20,36 +21,102 @@ function ClientsTable() {
   };
 
   const handleDelete = async (id) => {
-    // لم يتم تفعيل الحذف من Google Sheets بعد
-    alert('الحذف غير مفعل حالياً.');
+    if (!window.confirm('هل أنت متأكد أنك تريد حذف هذا العميل نهائيًا؟')) return;
+    const res = await fetch(`http://localhost:4000/api/clients/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-role': userRole,
+      },
+    });
+    if (res.ok) {
+      setClients(clients.filter(c => c.ClientID !== id));
+    } else {
+      const err = await res.json();
+      alert(err.error || 'حدث خطأ أثناء الحذف');
+    }
   };
 
   const handleEdit = (client) => {
-    setForm(client);
+    setForm({ ...client, branch: client.branch || user?.branch || user?.Branch || '1' });
     setEditId(client.ClientID);
     setShowModal(true);
   };
 
+
   const handleSubmit = async (e) => {
+    const ADMIN_ROLES = ['admin', 'مدير', 'مشرف', 'مدير النظام'];
     e.preventDefault();
-    // إضافة أو تعديل عميل
-    await fetch('http://localhost:4000/api/clients', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    const roleHeader = { 'x-user-role': userRole, 'x-user-branch': user?.branch || user?.Branch || '1' };
+    let submitForm = { ...form };
+    if (!ADMIN_ROLES.includes(userRole)) {
+      submitForm.branch = user?.branch || user?.Branch || '1';
+    }
+    if (editId) {
+      // تعديل عميل
+      const res = await fetch(`http://localhost:4000/api/clients/${editId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...roleHeader },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error && err.error.includes('الصلاحية')) {
+          alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+          return;
+        }
+        alert(err.error || 'حدث خطأ أثناء التعديل');
+        return;
+      }
+    } else {
+      // إضافة عميل جديد
+      const res = await fetch('http://localhost:4000/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...roleHeader },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error && err.error.includes('الصلاحية')) {
+          alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+          return;
+        }
+        alert(err.error || 'حدث خطأ أثناء الإضافة');
+        return;
+      }
+    }
     setShowModal(false);
-    setForm({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط' });
+    setForm({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط', branch: user?.branch || user?.Branch || '1' });
     setEditId(null);
     fetchClients();
   };
 
-  return (
+  const [branchFilter, setBranchFilter] = useState('all');
+const isAdmin = (userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام');
+const branches = Array.from(new Set(clients.map(c => c.branch).filter(Boolean)));
+
+return (
     <div className="bg-white rounded shadow p-6 mb-8">
+      {/* فلتر الفروع */}
+      {isAdmin && (
+        <div className="mb-4 flex items-center gap-2">
+          <label className="font-semibold text-blue-900">فرع:</label>
+          <select
+            className="border rounded px-2 py-1"
+            value={branchFilter}
+            onChange={e => setBranchFilter(e.target.value)}
+          >
+            <option value="all">كل الفروع</option>
+            {branches.map(b => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <h2 className="text-xl font-bold mb-4 text-center">جدول العملاء</h2>
       <button
         className="mb-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        onClick={() => { setShowModal(true); setEditId(null); setForm({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط' }); }}
+        onClick={() => { setShowModal(true); setEditId(null); setForm({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط', branch: user?.branch || user?.Branch || '1' }); }}
       >
         + إضافة عميل جديد
       </button>
@@ -66,11 +133,15 @@ function ClientsTable() {
               <th className="p-2 border">النوع</th>
               <th className="p-2 border">ملاحظات</th>
               <th className="p-2 border">الحالة</th>
+              <th className="p-2 border">الفرع</th>
               <th className="p-2 border">إجراءات</th>
             </tr>
           </thead>
           <tbody>
-            {clients.map((client, idx) => (
+            {(isAdmin
+                ? (branchFilter === 'all' ? clients : clients.filter(client => client.branch === branchFilter))
+                : clients.filter(client => client.branch === (user?.branch || user?.Branch || '1'))
+              ).map((client, idx) => (
               <tr key={client.ClientID || idx} className="hover:bg-gray-50">
                 <td className="p-2 border">{idx + 1}</td>
                 <td className="p-2 border">{client.Name}</td>
@@ -79,15 +150,14 @@ function ClientsTable() {
                 <td className="p-2 border">{client.Type}</td>
                 <td className="p-2 border">{client.Notes}</td>
                 <td className="p-2 border">{client.IsActive}</td>
+                    <td className="p-2 border">{client.branch || '-'}</td>
                 <td className="p-2 border">
-                  <button
-                    className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 mr-1"
-                    onClick={() => handleEdit(client)}
-                  >تعديل</button>
-                  <button
-                    className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                    onClick={() => handleDelete(client.ClientID)}
-                  >حذف</button>
+                  {(userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام') ? (
+                    <>
+                      <button className="text-blue-600 font-bold mr-2" onClick={() => handleEdit(client)}>تعديل</button>
+                      <button className="text-red-600 font-bold" onClick={() => handleDelete(client.ClientID)}>حذف</button>
+                    </>
+                  ) : null}
                 </td>
               </tr>
             ))}

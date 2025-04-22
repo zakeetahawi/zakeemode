@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 
-function InventoryTable() {
+function InventoryTable({ user }) {
+  const userRole = user?.role || user?.Role || 'موظف';
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ ItemName: '', Category: '', Quantity: '', Unit: '', Price: '', RelatedOrderID: '', CutOrderNumber: '', FactorySent: '', ExitPermitNumber: '', ContractNumber: '', Status: '', Notes: '', NotificationSent: '' });
+  const [form, setForm] = useState({ ItemName: '', Category: '', Quantity: '', Unit: '', Price: '', RelatedOrderID: '', CutOrderNumber: '', FactorySent: '', ExitPermitNumber: '', ContractNumber: '', Status: '', Notes: '', NotificationSent: '', branch: user?.branch || user?.Branch || '1' });
   const [editId, setEditId] = useState(null);
 
   useEffect(() => {
@@ -20,37 +21,107 @@ function InventoryTable() {
   };
 
   const handleDelete = async (id) => {
-    alert('الحذف غير مفعل حالياً.');
+    if (!window.confirm('هل أنت متأكد أنك تريد حذف هذا الصنف نهائيًا؟')) return;
+    const res = await fetch(`http://localhost:4000/api/inventory/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-role': user?.role || user?.Role || 'موظف',
+      },
+    });
+    if (res.ok) {
+      setItems(items.filter(i => i.ItemID !== id));
+    } else {
+      const err = await res.json();
+      alert(err.error || 'حدث خطأ أثناء الحذف');
+    }
   };
 
   const handleEdit = (item) => {
-    setForm(item);
+    setForm({ ...item, branch: item.branch || user?.branch || user?.Branch || '1' });
     setEditId(item.ItemID);
     setShowModal(true);
   };
 
+
   const handleSubmit = async (e) => {
+    const ADMIN_ROLES = ['admin', 'مدير', 'مشرف', 'مدير النظام'];
     e.preventDefault();
-    await fetch('http://localhost:4000/api/inventory', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    const roleHeader = { 'x-user-role': user?.role || user?.Role || 'موظف', 'x-user-branch': user?.branch || user?.Branch || '1' };
+    let submitForm = { ...form };
+    if (!ADMIN_ROLES.includes(user?.role || user?.Role || 'موظف')) {
+      submitForm.branch = user?.branch || user?.Branch || '1';
+    }
+    if (editId) {
+      // تعديل صنف
+      const res = await fetch(`http://localhost:4000/api/inventory/${editId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...roleHeader },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error && err.error.includes('الصلاحية')) {
+          alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+          return;
+        }
+        alert(err.error || 'حدث خطأ أثناء التعديل');
+        return;
+      }
+    } else {
+      // إضافة صنف جديد
+      const res = await fetch('http://localhost:4000/api/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...roleHeader },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error && err.error.includes('الصلاحية')) {
+          alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+          return;
+        }
+        alert(err.error || 'حدث خطأ أثناء الإضافة');
+        return;
+      }
+    }
     setShowModal(false);
-    setForm({ ItemName: '', Category: '', Quantity: '', Unit: '', Price: '', RelatedOrderID: '', CutOrderNumber: '', FactorySent: '', ExitPermitNumber: '', ContractNumber: '', Status: '', Notes: '', NotificationSent: '' });
+    setForm({ ItemName: '', Category: '', Quantity: '', Unit: '', Price: '', RelatedOrderID: '', CutOrderNumber: '', FactorySent: '', ExitPermitNumber: '', ContractNumber: '', Status: '', Notes: '', NotificationSent: '', branch: user?.branch || user?.Branch || '1' });
     setEditId(null);
     fetchItems();
   };
 
-  return (
+  const [branchFilter, setBranchFilter] = useState('all');
+const isAdmin = (userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام');
+const branches = Array.from(new Set(items.map(i => i.branch).filter(Boolean)));
+
+return (
     <div className="bg-white rounded shadow p-6 mb-8">
+      {/* فلتر الفروع */}
+      {isAdmin && (
+        <div className="mb-4 flex items-center gap-2">
+          <label className="font-semibold text-blue-900">فرع:</label>
+          <select
+            className="border rounded px-2 py-1"
+            value={branchFilter}
+            onChange={e => setBranchFilter(e.target.value)}
+          >
+            <option value="all">كل الفروع</option>
+            {branches.map(b => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <h2 className="text-xl font-bold mb-4 text-center">جدول المخزون</h2>
-      <button
-        className="mb-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        onClick={() => { setShowModal(true); setEditId(null); setForm({ ItemName: '', Category: '', Quantity: '', Unit: '', Price: '', RelatedOrderID: '', CutOrderNumber: '', FactorySent: '', ExitPermitNumber: '', ContractNumber: '', Status: '', Notes: '', NotificationSent: '' }); }}
-      >
-        + إضافة صنف جديد
-      </button>
+      {(userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام') && (
+        <button
+          className="mb-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          onClick={() => { setShowModal(true); setEditId(null); setForm({ ItemName: '', Category: '', Quantity: '', Unit: '', Price: '', RelatedOrderID: '', CutOrderNumber: '', FactorySent: '', ExitPermitNumber: '', ContractNumber: '', Status: '', Notes: '', NotificationSent: '', branch: user?.branch || user?.Branch || '1' }); }}
+        >
+          + إضافة صنف جديد
+        </button>
+      )}
       {loading ? (
         <div className="text-center">جاري التحميل...</div>
       ) : (
@@ -70,12 +141,18 @@ function InventoryTable() {
               <th className="p-2 border">رقم العقد</th>
               <th className="p-2 border">الحالة</th>
               <th className="p-2 border">ملاحظات</th>
+              <th className="p-2 border">الفرع</th>
               <th className="p-2 border">إشعار</th>
-              <th className="p-2 border">إجراءات</th>
+              {(userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام') && (
+                <th className="p-2 border">إجراءات</th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {items.map((item, idx) => (
+            {(isAdmin
+                ? (branchFilter === 'all' ? items : items.filter(item => item.branch === branchFilter))
+                : items.filter(item => item.branch === (user?.branch || user?.Branch || '1'))
+              ).map((item, idx) => (
               <tr key={item.ItemID || idx} className="hover:bg-gray-50">
                 <td className="p-2 border">{idx + 1}</td>
                 <td className="p-2 border">{item.ItemName}</td>
@@ -90,6 +167,7 @@ function InventoryTable() {
                 <td className="p-2 border">{item.ContractNumber}</td>
                 <td className="p-2 border">{item.Status}</td>
                 <td className="p-2 border">{item.Notes}</td>
+                    <td className="p-2 border">{item.branch || '-'}</td>
                 <td className="p-2 border">{item.NotificationSent}</td>
                 <td className="p-2 border">
                   <button
@@ -257,4 +335,17 @@ function InventoryTable() {
   );
 }
 
-export default InventoryTable;
+import InventoryMovements from './InventoryMovements';
+
+export default function InventoryPage(props) {
+  return (
+    <>
+      <InventoryTable {...props} />
+      <InventoryMovements />
+    </>
+  );
+}
+
+// للإبقاء على التصدير القديم لمن يستخدمه مباشرة
+export { InventoryTable };
+

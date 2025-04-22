@@ -5,14 +5,28 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (username === 'admin' && password === 'admin123') {
-      onLogin(username);
-    } else {
-      setError('اسم المستخدم أو كلمة المرور غير صحيحة');
+    setError('');
+    try {
+      const res = await fetch('http://localhost:4000/api/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setError(err.error || 'اسم المستخدم أو كلمة المرور غير صحيحة');
+        return;
+      }
+      const userObj = await res.json();
+      localStorage.setItem('user', JSON.stringify(userObj));
+      onLogin(userObj);
+    } catch (err) {
+      setError('حدث خطأ في الاتصال بالخادم');
     }
   };
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-100 to-white">
@@ -26,6 +40,7 @@ export default function Login({ onLogin }) {
             className="w-full border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
             value={username}
             onChange={e => setUsername(e.target.value)}
+            autoComplete="username"
             required
           />
         </div>
@@ -36,6 +51,7 @@ export default function Login({ onLogin }) {
             className="w-full border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
             value={password}
             onChange={e => setPassword(e.target.value)}
+            autoComplete="current-password"
             required
           />
         </div>

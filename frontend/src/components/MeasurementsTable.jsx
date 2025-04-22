@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
-function MeasurementsTable() {
+function MeasurementsTable({ user }) {
+  const userRole = user?.role || user?.Role || 'موظف';
   const [measurements, setMeasurements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -29,7 +30,19 @@ function MeasurementsTable() {
   };
 
   const handleDelete = async (id) => {
-    alert('الحذف غير مفعل حالياً.');
+    if (!window.confirm('هل أنت متأكد أنك تريد حذف هذا المقاس نهائيًا؟')) return;
+    const res = await fetch(`http://localhost:4000/api/measurements/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-role': user?.role || user?.Role || 'موظف',
+      },
+    });
+    if (res.ok) {
+      setMeasurements(measurements.filter(m => m.MeasurementID !== id));
+    } else {
+      const err = await res.json();
+      alert(err.error || 'حدث خطأ أثناء الحذف');
+    }
   };
 
   const handleEdit = (measurement) => {
@@ -38,13 +51,43 @@ function MeasurementsTable() {
     setShowModal(true);
   };
 
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await fetch('http://localhost:4000/api/measurements', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    const roleHeader = { 'x-user-role': user?.role || user?.Role || 'موظف' };
+    if (editId) {
+      // تعديل مقاس
+      const res = await fetch(`http://localhost:4000/api/measurements/${editId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...roleHeader },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error && err.error.includes('الصلاحية')) {
+          alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+          return;
+        }
+        alert(err.error || 'حدث خطأ أثناء التعديل');
+        return;
+      }
+    } else {
+      // إضافة مقاس جديد
+      const res = await fetch('http://localhost:4000/api/measurements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...roleHeader },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error && err.error.includes('الصلاحية')) {
+          alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+          return;
+        }
+        alert(err.error || 'حدث خطأ أثناء الإضافة');
+        return;
+      }
+    }
     setShowModal(false);
     setForm({
       OrderID: '',
@@ -115,14 +158,12 @@ function MeasurementsTable() {
                 <td className="p-2 border">{m.Notes}</td>
                 <td className="p-2 border">{m.NotificationSent}</td>
                 <td className="p-2 border">
-                  <button
-                    className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 mr-1"
-                    onClick={() => handleEdit(m)}
-                  >تعديل</button>
-                  <button
-                    className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                    onClick={() => handleDelete(m.MeasurementID)}
-                  >حذف</button>
+                  {(userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام') ? (
+                    <>
+                      <button className="text-blue-600 font-bold mr-2" onClick={() => handleEdit(m)}>تعديل</button>
+                      <button className="text-red-600 font-bold" onClick={() => handleDelete(m.MeasurementID)}>حذف</button>
+                    </>
+                  ) : null}
                 </td>
               </tr>
             ))}

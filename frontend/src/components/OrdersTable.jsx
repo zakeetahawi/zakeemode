@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
-function OrdersTable() {
+function OrdersTable({ user }) {
+  const userRole = user?.role || user?.Role || 'موظف';
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -16,7 +17,22 @@ function OrdersTable() {
     DeliveryBranch: '',
     Status: '',
     Priority: '',
+    branch: user?.branch || user?.Branch || '1',
+    Fabrics: [], // [{ name: '', qty: '' }]
   });
+
+  // لإدارة أصناف القماش في النموذج
+  const handleAddFabric = () => {
+    setForm({ ...form, Fabrics: [...(form.Fabrics || []), { name: '', qty: '' }] });
+  };
+  const handleRemoveFabric = (idx) => {
+    setForm({ ...form, Fabrics: form.Fabrics.filter((_, i) => i !== idx) });
+  };
+  const handleFabricChange = (idx, field, value) => {
+    const newFabrics = [...form.Fabrics];
+    newFabrics[idx][field] = value;
+    setForm({ ...form, Fabrics: newFabrics });
+  };
   const [editId, setEditId] = useState(null);
 
   useEffect(() => {
@@ -27,27 +43,91 @@ function OrdersTable() {
     setLoading(true);
     const res = await fetch('http://localhost:4000/api/orders');
     const data = await res.json();
-    setOrders(data);
+    // إذا كان هناك Fabrics كـ string، حوّله لمصفوفة
+    setOrders(Array.isArray(data) ? data.map(order => ({
+      ...order,
+      Fabrics: Array.isArray(order.Fabrics) ? order.Fabrics : (order.Fabrics ? JSON.parse(order.Fabrics) : []),
+    })) : []);
     setLoading(false);
   };
 
   const handleDelete = async (id) => {
-    alert('الحذف غير مفعل حالياً.');
+    if (!window.confirm('هل أنت متأكد أنك تريد حذف هذا الطلب نهائيًا؟')) return;
+    const res = await fetch(`http://localhost:4000/api/orders/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-role': userRole,
+      },
+    });
+    if (res.ok) {
+      setOrders(orders.filter(o => o.OrderID !== id));
+    } else {
+      const err = await res.json();
+      if (err.error && err.error.includes('الصلاحية')) {
+        alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+        return;
+      }
+      alert(err.error || 'حدث خطأ أثناء الحذف');
+    }
   };
 
   const handleEdit = (order) => {
-    setForm(order);
+    setForm({
+      ...order,
+      Fabrics: Array.isArray(order.Fabrics) ? order.Fabrics : (order.Fabrics ? JSON.parse(order.Fabrics) : []),
+      branch: order.branch || user?.branch || '1',
+    });
     setEditId(order.OrderID);
     setShowModal(true);
   };
 
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await fetch('http://localhost:4000/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    const roleHeader = { 'x-user-role': userRole, 'x-user-branch': user?.branch || user?.Branch || '1' };
+    let submitForm = { ...form };
+    // تأكد أن Fabrics مصفوفة وليست نص
+    if (submitForm.Fabrics && typeof submitForm.Fabrics === 'string') {
+      try { submitForm.Fabrics = JSON.parse(submitForm.Fabrics); } catch { submitForm.Fabrics = []; }
+    }
+    if (!Array.isArray(submitForm.Fabrics)) submitForm.Fabrics = [];
+    // إذا لم يكن المستخدم مشرف، اجعل branch تلقائي من المستخدم
+    if (!(userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام')) {
+      submitForm.branch = user?.branch || user?.Branch || '1';
+    }
+    if (editId) {
+      // تعديل طلب
+      const res = await fetch(`http://localhost:4000/api/orders/${editId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...roleHeader },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error && err.error.includes('الصلاحية')) {
+          alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+          return;
+        }
+        alert(err.error || 'حدث خطأ أثناء التعديل');
+        return;
+      }
+    } else {
+      // إضافة طلب جديد
+      const res = await fetch('http://localhost:4000/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...roleHeader },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error && err.error.includes('الصلاحية')) {
+          alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+          return;
+        }
+        alert(err.error || 'حدث خطأ أثناء الإضافة');
+        return;
+      }
+    }
     setShowModal(false);
     setForm({
       ClientID: '',
@@ -61,6 +141,8 @@ function OrdersTable() {
       DeliveryBranch: '',
       Status: '',
       Priority: '',
+      branch: user?.branch || user?.Branch || '1',
+      Fabrics: [],
     });
     setEditId(null);
     fetchOrders();
@@ -70,28 +152,32 @@ function OrdersTable() {
     <div className="bg-gradient-to-br from-blue-50 via-white to-gray-100 rounded-3xl shadow-2xl p-8 mb-12 border border-gray-200 max-w-7xl mx-auto rtl">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
         <h2 className="text-3xl font-extrabold text-blue-900 tracking-tight mb-2 md:mb-0 text-center md:text-right">جدول الطلبات</h2>
-        <button
-          className="px-6 py-2 bg-gradient-to-l from-blue-700 to-blue-500 text-white rounded-full shadow-md hover:scale-105 hover:from-blue-800 hover:to-blue-600 transition-all duration-200 font-bold text-lg"
-          onClick={() => {
-            setShowModal(true);
-            setEditId(null);
-            setForm({
-              ClientID: '',
-              OrderNumber: '',
-              OrderType: '',
-              ServiceTypes: '',
-              InvoiceNumber: '',
-              ContractNumber: '',
-              Notes: '',
-              DeliveryType: '',
-              DeliveryBranch: '',
-              Status: '',
-              Priority: '',
-            });
-          }}
-        >
-          + إضافة طلب جديد
-        </button>
+        {(userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام') && (
+          <button
+            className="px-6 py-2 bg-gradient-to-l from-blue-700 to-blue-500 text-white rounded-full shadow-md hover:scale-105 hover:from-blue-800 hover:to-blue-600 transition-all duration-200 font-bold text-lg"
+            onClick={() => {
+              setShowModal(true);
+              setEditId(null);
+              setForm({
+                ClientID: '',
+                OrderNumber: '',
+                OrderType: '',
+                ServiceTypes: '',
+                InvoiceNumber: '',
+                ContractNumber: '',
+                Notes: '',
+                DeliveryType: '',
+                DeliveryBranch: '',
+                Status: '',
+                Priority: '',
+                branch: user?.branch || user?.Branch || '1',
+                Fabrics: [],
+              });
+            }}
+          >
+            + إضافة طلب جديد
+          </button>
+        )}
       </div>
       {loading ? (
         <div className="text-center text-blue-700 text-xl font-semibold py-8 animate-pulse">جاري التحميل...</div>
@@ -112,6 +198,7 @@ function OrdersTable() {
                 <th className="p-3">الفرع</th>
                 <th className="p-3">الحالة</th>
                 <th className="p-3">الأولوية</th>
+                <th className="p-3">أنواع القماش</th>
                 <th className="p-3 rounded-tr-xl">إجراءات</th>
               </tr>
             </thead>
@@ -131,12 +218,27 @@ function OrdersTable() {
                   <td className="p-3">{order.DeliveryType}</td>
                   <td className="p-3">{order.DeliveryBranch}</td>
                   <td className="p-3">
+                    {order.Fabrics && order.Fabrics.length > 0 ? (
+                      <ul className="list-disc list-inside text-xs text-blue-900">
+                        {order.Fabrics.map((f, i) => (
+                          <li key={i}>{f.name} ({f.qty})</li>
+                        ))}
+                      </ul>
+                    ) : <span className="text-gray-400">لا يوجد</span>}
+                  </td>
+                  <td className="p-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${order.Status === 'جديد' ? 'bg-green-200 text-green-800' : order.Status === 'قيد التنفيذ' ? 'bg-yellow-200 text-yellow-800' : order.Status === 'مكتمل' ? 'bg-blue-200 text-blue-800' : 'bg-red-200 text-red-800'}`}>{order.Status}</span>
                   </td>
                   <td className="p-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${order.Priority === 'VIP' ? 'bg-red-200 text-red-800' : 'bg-gray-200 text-gray-700'}`}>{order.Priority}</span>
                   </td>
-                  <td className="p-3 flex flex-col gap-2 items-center justify-center">
+                  <td className="p-2 border">
+                    {(userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام') ? (
+                      <>
+                        <button className="text-blue-600 font-bold mr-2" onClick={() => handleEdit(order)}>تعديل</button>
+                        <button className="text-red-600 font-bold" onClick={() => handleDelete(order.OrderID)}>حذف</button>
+                      </>
+                    ) : null}
                     <button
                       className="w-24 px-3 py-1 bg-gradient-to-l from-green-500 to-green-400 text-white rounded-full shadow hover:from-green-600 hover:to-green-500 hover:scale-105 transition-all duration-150 font-bold"
                       onClick={() => handleEdit(order)}
@@ -159,6 +261,33 @@ function OrdersTable() {
             <h2 className="text-2xl font-extrabold mb-2 text-center text-blue-800 sticky top-0 bg-white z-10 pt-6">{editId ? 'تعديل طلب' : 'إضافة طلب جديد'}</h2>
             <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-y-auto px-8 pb-4 pt-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* حقول القماش */}
+                  <div className="md:col-span-2">
+                    <label className="block mb-1 font-semibold text-blue-900">أنواع القماش للطلب</label>
+                    {(form.Fabrics || []).map((f, idx) => (
+                      <div key={idx} className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          placeholder="اسم القماش"
+                          className="w-1/2 border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
+                          value={f.name}
+                          onChange={e => handleFabricChange(idx, 'name', e.target.value)}
+                          required
+                        />
+                        <input
+                          type="number"
+                          placeholder="الكمية"
+                          className="w-1/4 border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
+                          value={f.qty}
+                          min={1}
+                          onChange={e => handleFabricChange(idx, 'qty', e.target.value)}
+                          required
+                        />
+                        <button type="button" className="px-2 py-1 bg-red-100 text-red-700 rounded" onClick={() => handleRemoveFabric(idx)}>حذف</button>
+                      </div>
+                    ))}
+                    <button type="button" className="px-4 py-1 bg-blue-100 text-blue-700 rounded mt-1" onClick={handleAddFabric}>+ إضافة نوع قماش</button>
+                  </div>
                 <div>
                   <label className="block mb-1 font-semibold text-blue-900">رقم العميل</label>
                   <input
