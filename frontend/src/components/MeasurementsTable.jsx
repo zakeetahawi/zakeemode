@@ -1,4 +1,28 @@
 import React, { useEffect, useState } from 'react';
+import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Snackbar, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, CircularProgress } from '@mui/material';
+import { Add, Edit, Delete } from '@mui/icons-material';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { arSD } from '@mui/material/locale';
+
+const theme = createTheme({
+  direction: 'rtl',
+  palette: {
+    primary: { main: '#8d6748' },
+    secondary: { main: '#bfa980' },
+    background: { default: '#f8f5f2', paper: '#fff9f3' },
+    text: { primary: '#3e2c1c', secondary: '#6e5a41' },
+    error: { main: '#a94442' },
+    success: { main: '#6d8f6b' },
+    warning: { main: '#c9b26b' },
+    info: { main: '#7b8fa2' }
+  },
+  typography: {
+    fontFamily: 'Cairo, Tahoma, Arial, sans-serif',
+    h6: { fontWeight: 700 },
+    button: { fontWeight: 700 },
+  },
+}, arSD);
+
 
 function MeasurementsTable({ user }) {
   const userRole = user?.role || user?.Role || 'موظف';
@@ -6,16 +30,19 @@ function MeasurementsTable({ user }) {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
-    OrderID: '',
+    MeasurementID: '',
     ClientID: '',
+    OrderID: '',
+    Date: '',
     Status: '',
-    AppointmentDate: '',
-    AssignedTeam: '',
-    PDFLink: '',
     Notes: '',
-    NotificationSent: '',
   });
   const [editId, setEditId] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  useEffect(() => {
+    fetchMeasurements();
+  }, []);
 
   useEffect(() => {
     fetchMeasurements();
@@ -104,190 +131,81 @@ function MeasurementsTable({ user }) {
   };
 
   return (
-    <div className="bg-white rounded shadow p-6 mb-8">
-      <h2 className="text-xl font-bold mb-4 text-center">جدول المقاسات</h2>
-      <button
-        className="mb-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        onClick={() => {
-          setShowModal(true);
-          setEditId(null);
-          setForm({
-            OrderID: '',
-            ClientID: '',
-            Status: '',
-            AppointmentDate: '',
-            AssignedTeam: '',
-            PDFLink: '',
-            Notes: '',
-            NotificationSent: '',
-          });
-        }}
-      >
-        + إضافة مقاس جديد
-      </button>
-      {loading ? (
-        <div className="text-center">جاري التحميل...</div>
-      ) : (
-        <table className="w-full border text-center">
-          <thead>
-            <tr className="bg-gray-200">
-              <th className="p-2 border">#</th>
-              <th className="p-2 border">رقم الطلب</th>
-              <th className="p-2 border">رقم العميل</th>
-              <th className="p-2 border">الحالة</th>
-              <th className="p-2 border">تاريخ الموعد</th>
-              <th className="p-2 border">الفريق المكلف</th>
-              <th className="p-2 border">رابط PDF</th>
-              <th className="p-2 border">ملاحظات</th>
-              <th className="p-2 border">إشعار</th>
-              <th className="p-2 border">إجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {measurements.map((m, idx) => (
-              <tr key={m.MeasurementID || idx} className="hover:bg-gray-50">
-                <td className="p-2 border">{idx + 1}</td>
-                <td className="p-2 border">{m.OrderID}</td>
-                <td className="p-2 border">{m.ClientID}</td>
-                <td className="p-2 border">{m.Status}</td>
-                <td className="p-2 border">{m.AppointmentDate}</td>
-                <td className="p-2 border">{m.AssignedTeam}</td>
-                <td className="p-2 border">
-                  <a href={m.PDFLink} className="text-blue-600 underline" target="_blank" rel="noopener noreferrer">رابط</a>
-                </td>
-                <td className="p-2 border">{m.Notes}</td>
-                <td className="p-2 border">{m.NotificationSent}</td>
-                <td className="p-2 border">
-                  {(userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام') ? (
-                    <>
-                      <button className="text-blue-600 font-bold mr-2" onClick={() => handleEdit(m)}>تعديل</button>
-                      <button className="text-red-600 font-bold" onClick={() => handleDelete(m.MeasurementID)}>حذف</button>
-                    </>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border-2 border-blue-100 animate-fadeIn flex flex-col max-h-[95vh]">
-            <h2 className="text-xl font-bold mb-2 text-center text-blue-800 sticky top-0 bg-white z-10 pt-6">
-              {editId ? 'تعديل مقاس' : 'إضافة مقاس جديد'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-y-auto px-8 pb-4 pt-2">
-              <div>
-                <label className="block mb-1">رقم الطلب</label>
-                <input
-                  type="text"
-                  className="w-full border rounded p-2"
-                  value={form.OrderID}
-                  onChange={e => setForm({ ...form, OrderID: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block mb-1">رقم العميل</label>
-                <input
-                  type="text"
-                  className="w-full border rounded p-2"
-                  value={form.ClientID}
-                  onChange={e => setForm({ ...form, ClientID: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block mb-1">الحالة</label>
-                <select
-                  className="w-full border rounded p-2"
-                  value={form.Status}
-                  onChange={e => setForm({ ...form, Status: e.target.value })}
-                >
-                  <option value="">اختر الحالة</option>
-                  <option value="بحاجة جدولة">بحاجة جدولة</option>
-                  <option value="مجدول">مجدول</option>
-                  <option value="مكتمل">مكتمل</option>
-                </select>
-              </div>
-              <div>
-                <label className="block mb-1">تاريخ الموعد</label>
-                <input
-                  type="date"
-                  className="w-full border rounded p-2"
-                  value={form.AppointmentDate}
-                  onChange={e => setForm({ ...form, AppointmentDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block mb-1">الفريق المكلف</label>
-                <input
-                  type="text"
-                  className="w-full border rounded p-2"
-                  value={form.AssignedTeam}
-                  onChange={e => setForm({ ...form, AssignedTeam: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block mb-1">رابط PDF</label>
-                <input
-                  type="url"
-                  className="w-full border rounded p-2"
-                  value={form.PDFLink}
-                  onChange={e => setForm({ ...form, PDFLink: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block mb-1">ملاحظات</label>
-                <input
-                  type="text"
-                  className="w-full border rounded p-2"
-                  value={form.Notes}
-                  onChange={e => setForm({ ...form, Notes: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block mb-1">إشعار</label>
-                <select
-                  className="w-full border rounded p-2"
-                  value={form.NotificationSent}
-                  onChange={e => setForm({ ...form, NotificationSent: e.target.value })}
-                >
-                  <option value="">اختر</option>
-                  <option value="True">تم الإشعار</option>
-                  <option value="False">لم يتم الإشعار</option>
-                </select>
-              </div>
-              <div className="flex gap-2 justify-center">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >حفظ</button>
-                <button
-                  type="button"
-                  className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-                  onClick={() => {
-                    setShowModal(false);
-                    setEditId(null);
-                    setForm({
-                      OrderID: '',
-                      ClientID: '',
-                      Status: '',
-                      AppointmentDate: '',
-                      AssignedTeam: '',
-                      PDFLink: '',
-                      Notes: '',
-                      NotificationSent: '',
-                    });
-                  }}
-                >إلغاء</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+    <ThemeProvider theme={theme}>
+      <Box sx={{ bgcolor: 'background.default', p: 3, borderRadius: 3, boxShadow: 2, mb: 4 }}>
+        <Typography variant="h6" align="center" color="primary" gutterBottom>جدول المقاسات</Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          size="medium"
+          startIcon={<Add />}
+          sx={{ mb: 2, fontWeight: 700 }}
+          onClick={() => { setShowModal(true); setEditId(null); setForm({ MeasurementID: '', ClientID: '', OrderID: '', Date: '', Status: '', Notes: '' }); }}
+        >
+          إضافة مقاس جديد
+        </Button>
+        {loading ? (
+          <Box display="flex" justifyContent="center" alignItems="center" minHeight={120}>
+            <CircularProgress color="primary" />
+          </Box>
+        ) : (
+          <TableContainer component={Paper} sx={{ mt: 2, borderRadius: 2 }}>
+            <Table size="small" dir="rtl">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'secondary.light' }}>
+                  <TableCell align="center">#</TableCell>
+                  <TableCell align="center">رقم الطلب</TableCell>
+                  <TableCell align="center">رقم العميل</TableCell>
+                  <TableCell align="center">الحالة</TableCell>
+                  <TableCell align="center">تاريخ القياس</TableCell>
+                  <TableCell align="center">ملاحظات</TableCell>
+                  <TableCell align="center">إجراءات</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {measurements.map((m, idx) => (
+                  <TableRow key={m.MeasurementID || idx} hover>
+                    <TableCell align="center">{idx + 1}</TableCell>
+                    <TableCell align="center">{m.OrderID}</TableCell>
+                    <TableCell align="center">{m.ClientID}</TableCell>
+                    <TableCell align="center">{m.Status}</TableCell>
+                    <TableCell align="center">{m.Date}</TableCell>
+                    <TableCell align="center">{m.Notes}</TableCell>
+                    <TableCell align="center">
+                      <IconButton color="primary" onClick={() => handleEdit(m)}><Edit /></IconButton>
+                      <IconButton color="error" onClick={() => handleDelete(m.MeasurementID)}><Delete /></IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+        {/* Modal */}
+        <Dialog open={showModal} onClose={() => { setShowModal(false); setEditId(null); }} dir="rtl" PaperProps={{ sx: { borderRadius: 4, minWidth: 350 } }}>
+          <DialogTitle sx={{ bgcolor: 'secondary.light', color: 'primary.dark', fontWeight: 700 }}>
+            {editId ? 'تعديل مقاس' : 'إضافة مقاس جديد'}
+          </DialogTitle>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, py: 2 }}>
+            <TextField label="رقم الطلب" value={form.OrderID} onChange={e => setForm({ ...form, OrderID: e.target.value })} required fullWidth variant="outlined" />
+            <TextField label="رقم العميل" value={form.ClientID} onChange={e => setForm({ ...form, ClientID: e.target.value })} required fullWidth variant="outlined" />
+            <TextField label="الحالة" value={form.Status} onChange={e => setForm({ ...form, Status: e.target.value })} fullWidth variant="outlined" />
+            <TextField label="تاريخ القياس" value={form.Date} onChange={e => setForm({ ...form, Date: e.target.value })} fullWidth variant="outlined" />
+            <TextField label="ملاحظات" value={form.Notes} onChange={e => setForm({ ...form, Notes: e.target.value })} fullWidth variant="outlined" />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleSubmit} variant="contained" color="primary">{editId ? 'تحديث' : 'إضافة'}</Button>
+            <Button onClick={() => { setShowModal(false); setEditId(null); }} color="secondary">إلغاء</Button>
+          </DialogActions>
+        </Dialog>
+        {/* Snackbar */}
+        <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar(s => ({ ...s, open: false }))} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+          <Alert severity={snackbar.severity} variant="filled" sx={{ width: '100%' }} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </Box>
+    </ThemeProvider>
   );
 }
 

@@ -1,4 +1,28 @@
 import React, { useEffect, useState } from 'react';
+import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Snackbar, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, CircularProgress } from '@mui/material';
+import { Add, Edit, Delete } from '@mui/icons-material';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { arSD } from '@mui/material/locale';
+
+const theme = createTheme({
+  direction: 'rtl',
+  palette: {
+    primary: { main: '#8d6748' },
+    secondary: { main: '#bfa980' },
+    background: { default: '#f8f5f2', paper: '#fff9f3' },
+    text: { primary: '#3e2c1c', secondary: '#6e5a41' },
+    error: { main: '#a94442' },
+    success: { main: '#6d8f6b' },
+    warning: { main: '#c9b26b' },
+    info: { main: '#7b8fa2' }
+  },
+  typography: {
+    fontFamily: 'Cairo, Tahoma, Arial, sans-serif',
+    h6: { fontWeight: 700 },
+    button: { fontWeight: 700 },
+  },
+}, arSD);
+
 
 function OrdersTable({ user }) {
   const userRole = user?.role || user?.Role || 'موظف';
@@ -18,8 +42,15 @@ function OrdersTable({ user }) {
     Status: '',
     Priority: '',
     branch: user?.branch || user?.Branch || '1',
-    Fabrics: [], // [{ name: '', qty: '' }]
+    Fabrics: [],
   });
+  const [editId, setEditId] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
 
   // لإدارة أصناف القماش في النموذج
   const handleAddFabric = () => {
@@ -33,7 +64,6 @@ function OrdersTable({ user }) {
     newFabrics[idx][field] = value;
     setForm({ ...form, Fabrics: newFabrics });
   };
-  const [editId, setEditId] = useState(null);
 
   useEffect(() => {
     fetchOrders();
@@ -61,13 +91,14 @@ function OrdersTable({ user }) {
     });
     if (res.ok) {
       setOrders(orders.filter(o => o.OrderID !== id));
+      setSnackbar({ open: true, message: 'تم حذف الطلب بنجاح', severity: 'success' });
     } else {
       const err = await res.json();
       if (err.error && err.error.includes('الصلاحية')) {
-        alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+        setSnackbar({ open: true, message: 'ليس لديك الصلاحية لتنفيذ هذا الإجراء', severity: 'error' });
         return;
       }
-      alert(err.error || 'حدث خطأ أثناء الحذف');
+      setSnackbar({ open: true, message: err.error || 'حدث خطأ أثناء الحذف', severity: 'error' });
     }
   };
 
@@ -195,17 +226,17 @@ function OrdersTable({ user }) {
                 <th className="p-3">رقم العقد</th>
                 <th className="p-3">ملاحظات</th>
                 <th className="p-3">نوع التسليم</th>
-                <th className="p-3">الفرع</th>
+                <th className="p-3">فرع التسليم</th>
+                <th className="p-3">الأقمشة</th>
                 <th className="p-3">الحالة</th>
                 <th className="p-3">الأولوية</th>
-                <th className="p-3">أنواع القماش</th>
-                <th className="p-3 rounded-tr-xl">إجراءات</th>
+                <th className="p-3">إجراءات</th>
               </tr>
             </thead>
             <tbody>
               {orders.map((order, idx) => (
-                <tr key={order.OrderID || idx} className="hover:bg-blue-50 transition-all duration-150 group shadow rounded-xl">
-                  <td className="p-3 font-bold text-blue-700">{idx + 1}</td>
+                <tr key={order.OrderID || idx} className="hover:bg-gray-50">
+                  <td className="p-3">{idx + 1}</td>
                   <td className="p-3">{order.OrderNumber}</td>
                   <td className="p-3">{order.ClientID}</td>
                   <td className="p-3">
@@ -257,37 +288,37 @@ function OrdersTable({ user }) {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border-2 border-blue-100 animate-fadeIn flex flex-col max-h-[95vh]">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-4 relative">
             <h2 className="text-2xl font-extrabold mb-2 text-center text-blue-800 sticky top-0 bg-white z-10 pt-6">{editId ? 'تعديل طلب' : 'إضافة طلب جديد'}</h2>
             <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-y-auto px-8 pb-4 pt-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* حقول القماش */}
-                  <div className="md:col-span-2">
-                    <label className="block mb-1 font-semibold text-blue-900">أنواع القماش للطلب</label>
-                    {(form.Fabrics || []).map((f, idx) => (
-                      <div key={idx} className="flex gap-2 mb-2">
-                        <input
-                          type="text"
-                          placeholder="اسم القماش"
-                          className="w-1/2 border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
-                          value={f.name}
-                          onChange={e => handleFabricChange(idx, 'name', e.target.value)}
-                          required
-                        />
-                        <input
-                          type="number"
-                          placeholder="الكمية"
-                          className="w-1/4 border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
-                          value={f.qty}
-                          min={1}
-                          onChange={e => handleFabricChange(idx, 'qty', e.target.value)}
-                          required
-                        />
-                        <button type="button" className="px-2 py-1 bg-red-100 text-red-700 rounded" onClick={() => handleRemoveFabric(idx)}>حذف</button>
-                      </div>
-                    ))}
-                    <button type="button" className="px-4 py-1 bg-blue-100 text-blue-700 rounded mt-1" onClick={handleAddFabric}>+ إضافة نوع قماش</button>
-                  </div>
+                {/* حقول القماش */}
+                <div className="md:col-span-2">
+                  <label className="block mb-1 font-semibold text-blue-900">أنواع القماش للطلب</label>
+                  {(form.Fabrics || []).map((f, idx) => (
+                    <div key={idx} className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        placeholder="اسم القماش"
+                        className="w-1/2 border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
+                        value={f.name}
+                        onChange={e => handleFabricChange(idx, 'name', e.target.value)}
+                        required
+                      />
+                      <input
+                        type="number"
+                        placeholder="الكمية"
+                        className="w-1/4 border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
+                        value={f.qty}
+                        min={1}
+                        onChange={e => handleFabricChange(idx, 'qty', e.target.value)}
+                        required
+                      />
+                      <button type="button" className="px-2 py-1 bg-red-100 text-red-700 rounded" onClick={() => handleRemoveFabric(idx)}>حذف</button>
+                    </div>
+                  ))}
+                  <button type="button" className="px-4 py-1 bg-blue-100 text-blue-700 rounded mt-1" onClick={handleAddFabric}>+ إضافة نوع قماش</button>
+                </div>
                 <div>
                   <label className="block mb-1 font-semibold text-blue-900">رقم العميل</label>
                   <input
@@ -295,30 +326,7 @@ function OrdersTable({ user }) {
                     className="w-full border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
                     value={form.ClientID}
                     onChange={e => setForm({ ...form, ClientID: e.target.value })}
-                    required
                   />
-                </div>
-                <div>
-                  <label className="block mb-1 font-semibold text-blue-900">رقم الطلب</label>
-                  <input
-                    type="text"
-                    className="w-full border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
-                    value={form.OrderNumber}
-                    onChange={e => setForm({ ...form, OrderNumber: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-semibold text-blue-900">نوع الطلب</label>
-                  <select
-                    className="w-full border-2 border-blue-100 rounded-lg p-2 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
-                    value={form.OrderType}
-                    onChange={e => setForm({ ...form, OrderType: e.target.value })}
-                  >
-                    <option value="">اختر النوع</option>
-                    <option value="عادي">عادي</option>
-                    <option value="VIP">VIP</option>
-                  </select>
                 </div>
                 <div>
                   <label className="block mb-1 font-semibold text-blue-900">الخدمات</label>
@@ -401,41 +409,38 @@ function OrdersTable({ user }) {
                   </select>
                 </div>
               </div>
+              <div className="flex gap-4 justify-center mt-4 sticky bottom-0 bg-white z-10 pb-6 pt-2 border-t border-blue-100">
+                <button
+                  type="submit"
+                  className="px-8 py-2 bg-gradient-to-l from-blue-700 to-blue-500 text-white rounded-full shadow-md hover:scale-105 hover:from-blue-800 hover:to-blue-600 transition-all duration-200 font-bold text-lg"
+                >حفظ</button>
+                <button
+                  type="button"
+                  className="px-8 py-2 bg-gray-200 text-gray-800 rounded-full shadow hover:bg-gray-300 hover:scale-105 transition-all duration-200 font-bold text-lg"
+                  onClick={() => {
+                    setShowModal(false);
+                    setEditId(null);
+                    setForm({
+                      ClientID: '',
+                      OrderNumber: '',
+                      OrderType: '',
+                      ServiceTypes: '',
+                      InvoiceNumber: '',
+                      ContractNumber: '',
+                      Notes: '',
+                      DeliveryType: '',
+                      DeliveryBranch: '',
+                      Status: '',
+                      Priority: '',
+                    });
+                  }}
+                >إلغاء</button>
+              </div>
             </form>
-            <div className="flex gap-4 justify-center mt-4 sticky bottom-0 bg-white z-10 pb-6 pt-2 border-t border-blue-100">
-              <button
-                type="submit"
-                className="px-8 py-2 bg-gradient-to-l from-blue-700 to-blue-500 text-white rounded-full shadow-md hover:scale-105 hover:from-blue-800 hover:to-blue-600 transition-all duration-200 font-bold text-lg"
-                onClick={handleSubmit}
-              >حفظ</button>
-              <button
-                type="button"
-                className="px-8 py-2 bg-gray-200 text-gray-800 rounded-full shadow hover:bg-gray-300 hover:scale-105 transition-all duration-200 font-bold text-lg"
-                onClick={() => {
-                  setShowModal(false);
-                  setEditId(null);
-                  setForm({
-                    ClientID: '',
-                    OrderNumber: '',
-                    OrderType: '',
-                    ServiceTypes: '',
-                    InvoiceNumber: '',
-                    ContractNumber: '',
-                    Notes: '',
-                    DeliveryType: '',
-                    DeliveryBranch: '',
-                    Status: '',
-                    Priority: '',
-                  });
-                }}
-              >إلغاء</button>
-            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
-
 export default OrdersTable;
-

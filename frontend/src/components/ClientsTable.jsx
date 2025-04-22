@@ -1,16 +1,47 @@
 import React, { useEffect, useState } from 'react';
+import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Snackbar, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, CircularProgress } from '@mui/material';
+import { Add, Edit, Delete } from '@mui/icons-material';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { arSD } from '@mui/material/locale';
+
+// Theme ترابي مخصص
+const theme = createTheme({
+  direction: 'rtl',
+  palette: {
+    primary: { main: '#8d6748' }, // بني ترابي
+    secondary: { main: '#bfa980' }, // رملي فاتح
+    background: { default: '#f8f5f2', paper: '#fff9f3' },
+    text: { primary: '#3e2c1c', secondary: '#6e5a41' },
+    error: { main: '#a94442' },
+    success: { main: '#6d8f6b' },
+    warning: { main: '#c9b26b' },
+    info: { main: '#7b8fa2' }
+  },
+  typography: {
+    fontFamily: 'Cairo, Tahoma, Arial, sans-serif',
+    h6: { fontWeight: 700 },
+    button: { fontWeight: 700 },
+  },
+}, arSD);
+
 
 function ClientsTable({ user }) {
+  // ...
+  // باقي المتغيرات كما هي
   const userRole = user?.role || user?.Role || 'موظف';
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط', branch: user?.branch || user?.Branch || '1' });
   const [editId, setEditId] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     fetchClients();
   }, []);
+
+  // ... باقي الدوال كما هي مع استبدال alert بـ setSnackbar
+
 
   const fetchClients = async () => {
     setLoading(true);
@@ -30,11 +61,13 @@ function ClientsTable({ user }) {
     });
     if (res.ok) {
       setClients(clients.filter(c => c.ClientID !== id));
+      setSnackbar({ open: true, message: 'تم حذف العميل بنجاح', severity: 'success' });
     } else {
       const err = await res.json();
-      alert(err.error || 'حدث خطأ أثناء الحذف');
+      setSnackbar({ open: true, message: err.error || 'حدث خطأ أثناء الحذف', severity: 'error' });
     }
   };
+
 
   const handleEdit = (client) => {
     setForm({ ...client, branch: client.branch || user?.branch || user?.Branch || '1' });
@@ -61,10 +94,10 @@ function ClientsTable({ user }) {
       if (!res.ok) {
         const err = await res.json();
         if (err.error && err.error.includes('الصلاحية')) {
-          alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+          setSnackbar({ open: true, message: 'ليس لديك الصلاحية لتنفيذ هذا الإجراء', severity: 'error' });
           return;
         }
-        alert(err.error || 'حدث خطأ أثناء التعديل');
+        setSnackbar({ open: true, message: err.error || 'حدث خطأ أثناء التعديل', severity: 'error' });
         return;
       }
     } else {
@@ -77,10 +110,10 @@ function ClientsTable({ user }) {
       if (!res.ok) {
         const err = await res.json();
         if (err.error && err.error.includes('الصلاحية')) {
-          alert('ليس لديك الصلاحية لتنفيذ هذا الإجراء');
+          setSnackbar({ open: true, message: 'ليس لديك الصلاحية لتنفيذ هذا الإجراء', severity: 'error' });
           return;
         }
-        alert(err.error || 'حدث خطأ أثناء الإضافة');
+        setSnackbar({ open: true, message: err.error || 'حدث خطأ أثناء الإضافة', severity: 'error' });
         return;
       }
     }
@@ -88,169 +121,104 @@ function ClientsTable({ user }) {
     setForm({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط', branch: user?.branch || user?.Branch || '1' });
     setEditId(null);
     fetchClients();
+    setSnackbar({ open: true, message: editId ? 'تم تحديث العميل بنجاح' : 'تم إضافة العميل بنجاح', severity: 'success' });
   };
 
   const [branchFilter, setBranchFilter] = useState('all');
-const isAdmin = (userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام');
-const branches = Array.from(new Set(clients.map(c => c.branch).filter(Boolean)));
+  const isAdmin = (userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام');
+  const branches = Array.from(new Set(clients.map(c => c.branch).filter(Boolean)));
 
-return (
-    <div className="bg-white rounded shadow p-6 mb-8">
-      {/* فلتر الفروع */}
-      {isAdmin && (
-        <div className="mb-4 flex items-center gap-2">
-          <label className="font-semibold text-blue-900">فرع:</label>
-          <select
-            className="border rounded px-2 py-1"
-            value={branchFilter}
-            onChange={e => setBranchFilter(e.target.value)}
+  return (
+    <ThemeProvider theme={theme}>
+      <Box sx={{ bgcolor: 'background.default', p: 3, borderRadius: 3, boxShadow: 2, mb: 4 }}>
+        <Typography variant="h6" align="center" color="primary" gutterBottom>جدول العملاء</Typography>
+        {(userRole === 'admin' || userRole === 'مدير' || userRole === 'مشرف' || userRole === 'مدير النظام') && (
+          <Button
+            variant="contained"
+            color="primary"
+            size="medium"
+            startIcon={<Add />}
+            sx={{ mb: 2, fontWeight: 700 }}
+            onClick={() => { setShowModal(true); setEditId(null); setForm({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط', branch: user?.branch || user?.Branch || '1' }); }}
           >
-            <option value="all">كل الفروع</option>
-            {branches.map(b => (
-              <option key={b} value={b}>{b}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <h2 className="text-xl font-bold mb-4 text-center">جدول العملاء</h2>
-      <button
-        className="mb-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        onClick={() => { setShowModal(true); setEditId(null); setForm({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط', branch: user?.branch || user?.Branch || '1' }); }}
-      >
-        + إضافة عميل جديد
-      </button>
-      {loading ? (
-        <div className="text-center">جاري التحميل...</div>
-      ) : (
-        <table className="w-full border text-center">
-          <thead>
-            <tr className="bg-gray-200">
-              <th className="p-2 border">#</th>
-              <th className="p-2 border">الاسم</th>
-              <th className="p-2 border">الهاتف</th>
-              <th className="p-2 border">العنوان</th>
-              <th className="p-2 border">النوع</th>
-              <th className="p-2 border">ملاحظات</th>
-              <th className="p-2 border">الحالة</th>
-              <th className="p-2 border">الفرع</th>
-              <th className="p-2 border">إجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(isAdmin
-                ? (branchFilter === 'all' ? clients : clients.filter(client => client.branch === branchFilter))
-                : clients.filter(client => client.branch === (user?.branch || user?.Branch || '1'))
-              ).map((client, idx) => (
-              <tr key={client.ClientID || idx} className="hover:bg-gray-50">
-                <td className="p-2 border">{idx + 1}</td>
-                <td className="p-2 border">{client.Name}</td>
-                <td className="p-2 border">{client.Phone}</td>
-                <td className="p-2 border">{client.Address}</td>
-                <td className="p-2 border">{client.Type}</td>
-                <td className="p-2 border">{client.Notes}</td>
-                <td className="p-2 border">{client.IsActive}</td>
-                    <td className="p-2 border">{client.branch || '-'}</td>
-                <td className="p-2 border">
-                  {(userRole === 'مدير' || userRole === 'مشرف' || userRole === 'admin' || userRole === 'مدير النظام') ? (
-                    <>
-                      <button className="text-blue-600 font-bold mr-2" onClick={() => handleEdit(client)}>تعديل</button>
-                      <button className="text-red-600 font-bold" onClick={() => handleDelete(client.ClientID)}>حذف</button>
-                    </>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border-2 border-blue-100 animate-fadeIn flex flex-col max-h-[95vh]">
-            <h2 className="text-xl font-bold mb-2 text-center text-blue-800 sticky top-0 bg-white z-10 pt-6">
-              {editId ? 'تعديل عميل' : 'إضافة عميل جديد'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-y-auto px-8 pb-4 pt-2">
-              <div>
-                <label className="block mb-1">اسم العميل</label>
-                <input
-                  type="text"
-                  className="w-full border rounded p-2"
-                  value={form.Name}
-                  onChange={e => setForm({ ...form, Name: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block mb-1">الهاتف</label>
-                <input
-                  type="text"
-                  className="w-full border rounded p-2"
-                  value={form.Phone}
-                  onChange={e => setForm({ ...form, Phone: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block mb-1">العنوان</label>
-                <input
-                  type="text"
-                  className="w-full border rounded p-2"
-                  value={form.Address}
-                  onChange={e => setForm({ ...form, Address: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block mb-1">النوع</label>
-                <select
-                  className="w-full border rounded p-2"
-                  value={form.Type}
-                  onChange={e => setForm({ ...form, Type: e.target.value })}
-                >
-                  <option value="">اختر النوع</option>
-                  <option value="أفراد">أفراد</option>
-                  <option value="معرض">معرض</option>
-                  <option value="جملة">جملة</option>
-                  <option value="شركات">شركات</option>
-                  <option value="مهندسين">مهندسين</option>
-                </select>
-              </div>
-              <div>
-                <label className="block mb-1">ملاحظات</label>
-                <input
-                  type="text"
-                  className="w-full border rounded p-2"
-                  value={form.Notes}
-                  onChange={e => setForm({ ...form, Notes: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block mb-1">الحالة</label>
-                <select
-                  className="w-full border rounded p-2"
-                  value={form.IsActive}
-                  onChange={e => setForm({ ...form, IsActive: e.target.value })}
-                >
-                  <option value="نشط">نشط</option>
-                  <option value="غير نشط">غير نشط</option>
-                </select>
-              </div>
-              <div className="flex gap-2 justify-center">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >حفظ</button>
-                <button
-                  type="button"
-                  className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-                  onClick={() => { setShowModal(false); setEditId(null); setForm({ Name: '', Phone: '', Address: '', Type: '', Notes: '', IsActive: 'نشط' }); }}
-                >إلغاء</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+            إضافة عميل جديد
+          </Button>
+        )}
+        {loading ? (
+          <Box display="flex" justifyContent="center" alignItems="center" minHeight={120}>
+            <CircularProgress color="primary" />
+          </Box>
+        ) : (
+          <TableContainer component={Paper} sx={{ mt: 2, borderRadius: 2 }}>
+            <Table size="small" dir="rtl">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'secondary.light' }}>
+                  <TableCell align="center">#</TableCell>
+                  <TableCell align="center">الاسم</TableCell>
+                  <TableCell align="center">الهاتف</TableCell>
+                  <TableCell align="center">العنوان</TableCell>
+                  <TableCell align="center">النوع</TableCell>
+                  <TableCell align="center">ملاحظات</TableCell>
+                  <TableCell align="center">الحالة</TableCell>
+                  <TableCell align="center">الفرع</TableCell>
+                  <TableCell align="center">إجراءات</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {clients.map((c, idx) => (
+                  <TableRow key={c.ClientID || idx} hover>
+                    <TableCell align="center">{idx + 1}</TableCell>
+                    <TableCell align="center">{c.Name}</TableCell>
+                    <TableCell align="center">{c.Phone}</TableCell>
+                    <TableCell align="center">{c.Address}</TableCell>
+                    <TableCell align="center">{c.Type}</TableCell>
+                    <TableCell align="center">{c.Notes}</TableCell>
+                    <TableCell align="center">{c.IsActive}</TableCell>
+                    <TableCell align="center">{c.branch}</TableCell>
+                    <TableCell align="center">
+                      {(userRole === 'admin' || userRole === 'مدير' || userRole === 'مشرف' || userRole === 'مدير النظام') && (
+                        <>
+                          <IconButton color="primary" onClick={() => handleEdit(c)}><Edit /></IconButton>
+                          <IconButton color="error" onClick={() => handleDelete(c.ClientID)}><Delete /></IconButton>
+                        </>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+        {/* Modal */}
+        <Dialog open={showModal} onClose={() => { setShowModal(false); setEditId(null); }} dir="rtl" PaperProps={{ sx: { borderRadius: 4, minWidth: 350 } }}>
+          <DialogTitle sx={{ bgcolor: 'secondary.light', color: 'primary.dark', fontWeight: 700 }}>
+            {editId ? 'تعديل عميل' : 'إضافة عميل جديد'}
+          </DialogTitle>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, py: 2 }}>
+            <TextField label="الاسم" value={form.Name} onChange={e => setForm({ ...form, Name: e.target.value })} required fullWidth variant="outlined" />
+            <TextField label="الهاتف" value={form.Phone} onChange={e => setForm({ ...form, Phone: e.target.value })} required fullWidth variant="outlined" />
+            <TextField label="العنوان" value={form.Address} onChange={e => setForm({ ...form, Address: e.target.value })} required fullWidth variant="outlined" />
+            <TextField label="النوع" value={form.Type} onChange={e => setForm({ ...form, Type: e.target.value })} fullWidth variant="outlined" />
+            <TextField label="ملاحظات" value={form.Notes} onChange={e => setForm({ ...form, Notes: e.target.value })} fullWidth variant="outlined" />
+            <TextField select label="الحالة" value={form.IsActive} onChange={e => setForm({ ...form, IsActive: e.target.value })} SelectProps={{ native: true }} fullWidth variant="outlined">
+              <option value="نشط">نشط</option>
+              <option value="غير نشط">غير نشط</option>
+            </TextField>
+            <TextField label="الفرع" value={form.branch} onChange={e => setForm({ ...form, branch: e.target.value })} required fullWidth variant="outlined" />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleSubmit} variant="contained" color="primary">{editId ? 'تحديث' : 'إضافة'}</Button>
+            <Button onClick={() => { setShowModal(false); setEditId(null); }} color="secondary">إلغاء</Button>
+          </DialogActions>
+        </Dialog>
+        {/* Snackbar */}
+        <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar(s => ({ ...s, open: false }))} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+          <Alert severity={snackbar.severity} variant="filled" sx={{ width: '100%' }} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </Box>
+    </ThemeProvider>
   );
 }
 
